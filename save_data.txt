@@ -1,0 +1,113 @@
+import os
+import pandas as pd
+import re
+import openpyxl
+
+# Dossier contenant les fichiers CSV
+csv_folder = '../data/international_TES'
+
+# Lister tous les fichiers CSV dans le dossier
+csv_files = [f for f in os.listdir(csv_folder) if f.endswith('.csv')]
+ 
+# Dictionnaire pour stocker les DataFrames
+dfs = {}
+
+for csv_file in csv_files:
+    file_path = os.path.join(csv_folder, csv_file)
+    # Prendre uniqument les nombres de 'csv_file'
+    year = re.sub(r'\D', '', csv_file)
+    df = pd.read_csv(file_path)
+    dfs[year] = df
+
+df_pays = pd.read_excel(
+    "../data/international_TES/ReadMe_ICIO_small.xlsx",
+    sheet_name="Area_Activities",
+    header=2,      # L'en-tête ("Code") est bien à la ligne 3 (index 2)
+    usecols='C'    # ON NE LIT QUE LA COLONNE C
+)
+df_pays.rename(columns={'Code': 'Pays'})
+
+
+
+
+
+
+
+
+
+
+
+# Nettoyage des noms de colonnes (suppression des 4 premiers caractères) et de la première colonne (sauf 3 dernières lignes)
+df_clean = {}
+for year, df in dfs.items():
+    # Nettoyage des colonnes
+    new_cols = [col[4:] if len(col) > 4 else col for col in df.columns]
+    df_clean[year] = df.copy()
+    df_clean[year].columns = new_cols
+
+    # Nettoyage de la première colonne (sauf 3 dernières lignes)
+    if df_clean[year].shape[0] > 3:
+        main_rows = df_clean[year].iloc[:-3, 0].apply(lambda x: x[4:] if isinstance(x, str) and len(x) > 4 else x)
+        last_rows = df_clean[year].iloc[-3:, 0]
+        df_clean[year].iloc[:-3, 0] = main_rows
+        df_clean[year].iloc[-3:, 0] = last_rows
+        df_clean[year].set_index("V1", inplace=True)
+
+
+
+
+
+
+
+
+
+
+
+# Somme des colonnes et des lignes ayant le même nom dans chaque DataFrame de df_clean
+
+df_sum = {}
+for year, df in df_clean.items():
+    # Somme des colonnes ayant le même nom
+    df_cols_summed = df.groupby(df.columns, axis=1).sum()
+    # Somme des lignes ayant le même nom (index)
+    df_rows_summed = df_cols_summed.groupby(df_cols_summed.index).sum()
+    df_sum[year] = df_rows_summed
+
+
+
+
+
+
+
+
+descp_nace = pd.read_excel("../data/NACE 38 - 88 detaille vf.xlsx")
+# On rempli les celluls qui n'ont pas été remplies à cause de la fusion des cellules
+descp_nace.fillna(method='ffill', inplace=True)
+
+
+
+
+
+
+
+
+
+# Agrégation des DataFrames de df_sum de NACE 88 vers NACE 17
+df_sum_nace17 = {}
+# Créer un mapping NACE 88 -> NACE 17 à partir de descp_nace
+nace88_to_17 = descp_nace.set_index('Nace 88')['NACE 17'].to_dict()
+
+for year, df in df_sum.items():
+    # Remplacer les noms de colonnes par leur NACE 17
+    new_cols = [nace88_to_17.get(col, col) for col in df.columns]
+    df_nace17 = df.copy()
+    df_nace17.columns = new_cols
+    # Remplacer les indices par leur NACE 17
+    new_idx = [nace88_to_17.get(idx, idx) for idx in df_nace17.index]
+    df_nace17.index = new_idx
+    # Grouper et sommer par NACE 17 (colonnes et lignes)
+    df_nace17 = df_nace17.groupby(df_nace17.index).sum()
+    df_nace17 = df_nace17.groupby(axis=1, level=0).sum()
+    df_sum_nace17[year] = df_nace17
+
+df_sum_nace17["2018"]

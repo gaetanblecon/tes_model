@@ -1,0 +1,12 @@
+# Dossier de l'environnement virtuel Python
+tes_env/
+
+# Fichiers temporaires d'Excel
+~$*.xlsx
+
+# Dossier contenant les données (si vous ne voulez pas les mettre sur GitHub)
+/data/
+
+# Dossiers de travail Python (si applicable)
+__pycache__/
+.env
